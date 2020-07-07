@@ -51,6 +51,9 @@ int main(int argc, char **argv) {
         arg16 = (bytes[i+2] << 8) | bytes[i+3];
         printf("VAR[0x%02x] = %3d\n", arg8, arg16);
         i+=3; break;
+      case 0x1:
+        printf("var(...) = var(...)\n");
+        i+=2; break;
       case 0x3:
         arg8 = bytes[i+1];
         arg16 = (bytes[i+2] << 8) | bytes[i+3];
@@ -78,6 +81,9 @@ int main(int argc, char **argv) {
         arg16 = (bytes[i+2] << 8) | bytes[i+3];
         printf("jmp if var(var[0x%02x] = 0x%04x\n", arg8, arg16);
         i+=3; break;
+      case 0xa:
+        printf("jmpif(var(..), @....)\n");
+        i+=5; break;
       case 0xb:
         arg16 = f16(bytes+i+1);
         printf("set palette [%3d]\n", arg16);
