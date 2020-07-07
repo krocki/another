@@ -13,6 +13,10 @@ u16 f16(u8 *bytes) {
   return (u16)(bytes[0] << 8) | bytes[1];
 }
 
+void draw_shape(u8 p, u8 o, u8 op, u8 zoom, u8 x, u8 y) {
+  printf("draw_shape 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x\n", p, o, op, zoom, x, y);
+}
+
 int main(int argc, char **argv) {
 
   if (argc < 2) {
@@ -39,6 +43,7 @@ int main(int argc, char **argv) {
   for (int i=0; i<n; i++) {
     u8 v = bytes[i];
     u16 arg16, arg8;
+    u8 zoom=0, polygons=0, x=0, y=0;
     printf("0x%04x: ", i);
     switch(v) {
       case 0x0:
@@ -118,12 +123,43 @@ int main(int argc, char **argv) {
           bytes[i+4], bytes[i+5]);
         i+=5; break;
       case 0x40 ... 0x7f:
-        printf("DRAW_POLY_SPRITE %02x 0x%02x%02x%02x%02x%02x\n",
-          bytes[i], bytes[i+1], bytes[i+2], bytes[i+3], bytes[i+4], bytes[i+5]);
-        i+=5; break;
+        printf("DRAW_POLY_SPRITE opcode %02x\n", v);
+        u16 offset = (f16(bytes+1+i) << 1) & 0xfffe;
+        x = f8(bytes+3+i);
+        i+=3;
+        if (0 == (v & 0x20)) {
+          if (0 == (v & 0x10)) {
+            x = (x << 8) | f8(bytes+1+i);
+            i++;
+          } else { /* x = vars(x) */ }
+        } else {
+          if (v & 0x10) {
+            x += 256;
+          }
+        }
+        y=f8(bytes+i+i); i++;
+        if (0 == (v & 0x8)) {
+          if (0 == (v & 0x4)) {
+            y = (y << 8) | f8(bytes+i+1); i++;
+          } else { }
+        }
+        if (0 == (v & 0x2)) {
+          if (v & 0x1) {
+            zoom = f8(bytes+i+1); i++;
+          }
+        } else {
+          if (v & 0x1) {
+            /* .... */
+          } else {
+            zoom = f8(bytes+i+1); i++;
+          }
+        }
+        draw_shape(polygons, offset, 0xff, zoom, x, y);
+        break;
       case 0x80 ... 0xff:
         printf("DRAW_POLY_BACKGROUND %02x 0x%02x%02x%02x\n",
           bytes[i], bytes[i+1], bytes[i+2], bytes[i+3]);
+        draw_shape(polygons, offset, 0xff, 64, x, y);
         i+=3; break;
       default:
         printf("unk 0x%04x\n", v);
