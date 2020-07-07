@@ -1,5 +1,5 @@
 .SUFFIXES:
-TARGETS=disasm
+TARGETS=disasm gl_canvas
 
 CC=gcc
 LD=gcc
@@ -26,7 +26,7 @@ all: $(TARGETS)
 disasm: disasm.o
 	$(LD) -o $@ $^ $(LFLAGS)
 
-gl_another: gl_another.o
+gl_%: gl_%.o
 	$(LD) $^ $(LFLAGS) -o $@
 
 clean:
