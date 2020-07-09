@@ -1,9 +1,4 @@
-#include <stdlib.h>
-#include <stdint.h>
-#include <stdio.h>
-
-typedef uint8_t  u8;
-typedef uint16_t u16;
+#include "defs.h"
 
 u8 f8(u8 *bytes) {
   return bytes[0];
@@ -24,23 +19,11 @@ int main(int argc, char **argv) {
     return 0;
   }
 
-  FILE *f = fopen(argv[1], "rb");
+  byte_array bytecode;
+  read_array(&bytecode, argv[1]);
+  u8 *bytes = bytecode.bytes;
 
-  if (NULL == f) {
-    fprintf(stderr, "couldn't open %s\n", argv[1]);
-    return -1;
-  }
-
-  fseek(f, 0, SEEK_END);
-  int n = ftell(f);
-  rewind(f);
-
-  printf("file=%s, size=%d\n", argv[1], n);
-
-  u8 *bytes = malloc(n * sizeof(u8));
-  fread(bytes, sizeof(u8), n, f);
-
-  for (int i=0; i<n; i++) {
+  for (int i=0; i<bytecode.n; i++) {
     u8 v = bytes[i];
     u16 arg16, arg8;
     u8 zoom=0, polygons=0, x=0, y=0;
@@ -174,8 +157,6 @@ int main(int argc, char **argv) {
     }
   }
 
-  fclose(f);
-  free(bytes);
+  free(bytecode.bytes);
   return 0;
-
 }
