@@ -3,8 +3,8 @@ TARGETS=disasm gl_canvas vm
 
 CC=gcc
 LD=gcc
-CFLAGS=-g -Wfatal-errors -O0 -Wall
-LFLAGS=-g -lm -lc
+CFLAGS=-g3 -Wfatal-errors -O0 -Wall
+LFLAGS=-g3 -lm -lc
 DEPS:=$(wildcard *.h) Makefile
 
 # GL

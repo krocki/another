@@ -3,6 +3,7 @@
 #define SCALE 1
 #define SCR_W 320
 #define SCR_H 200
+#define PAGE_SIZE (SCR_W*SCR_H)
 
 typedef struct {
   int id;
@@ -14,12 +15,39 @@ typedef struct {
   u32 ticks;
 } another_vm;
 
+u8 page_front;
+u8 page_back;
+u8 page_current;
+
+u8 buffer[PAGE_SIZE * 4];
+
+u8 get_page(u8 num) {
+  switch (num) {
+    case 0xff: return page_back; break;
+    case 0xfe: return page_front; break;
+    case 0x0 ... 0x3: return num; break;
+    default: printf("illegal page\n"); return 0; break;
+  }
+
+}
+
+void fill_buf(u8 *buf, u16 len, u8 val) {
+  while (len-- > 0) *buf++ = val;
+}
+
+void fill_page(u8 num, u8 color) {
+  printf("fill page(page=0x%02x, color=0x%02x)\n", num, color);
+  u8 pg = get_page(num);
+  fill_buf(buffer+pg*PAGE_SIZE, PAGE_SIZE, color);
+}
+
 #define F8 (code[vm->pc++])
 void tick(another_vm *vm, u8 *code) {
 
   printf("[tick: %u, pc=0x%04x] ", vm->ticks, vm->pc);
   u8 op = F8;
   printf("op=0x%02x ", op);
+  u8 arg0, arg1;
   u16 arg;
 
   switch (op) {
@@ -39,6 +67,11 @@ void tick(another_vm *vm, u8 *code) {
           arg = F8 << 8 | F8;
           printf("CALL 0x%04x\n", arg);
           vm->pc = arg;
+          break;
+        case 0xe:
+          // FILL page
+          arg0 = F8; arg1 = F8;
+          fill_page(arg0, arg1);
           break;
         default:
           printf("NOT IMPLEMENTED!\n");
