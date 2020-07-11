@@ -27,7 +27,7 @@ double get_time() {
 
 #include <GLFW/glfw3.h>
 GLuint tex[NUM_BUFFERS];
-float buffer[TEX_W * TEX_H];
+float buffer[4 * TEX_W * TEX_H];
 int tex_no = 0;
 double t0;
 int gl_ok=0;
@@ -300,7 +300,7 @@ void texupdate() {
 
   glBindTexture(GL_TEXTURE_2D, tex[tex_no]);
   //for (int i=0; i<TEX_W*TEX_H; i++) buffer[i] = buffer[tex_no][i];
-  glTexSubImage2D( GL_TEXTURE_2D, 0, 0, 0, TEX_W, TEX_H, GL_RED, GL_FLOAT, buffer );
+  glTexSubImage2D( GL_TEXTURE_2D, 0, 0, 0, TEX_W, TEX_H, GL_RED, GL_FLOAT, &buffer[tex_no*TEX_W*TEX_H] );
 
 }
 
@@ -341,12 +341,10 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
     glfwSetWindowShouldClose(window, GLFW_TRUE);
   else if (action==GLFW_RELEASE) {
     switch(key) {
-      //case GLFW_KEY_0:
-      //  diag();
-      //  texupdate(); break;
-      //case GLFW_KEY_1:
-      //  r();
-      //  texupdate(); break;
+      case GLFW_KEY_0:
+        texupdate(); break;
+      case GLFW_KEY_1:
+        fill(&buffer[tex_no*TEX_W*TEX_H]); texupdate(); break;
       default:
       break;
     }
@@ -525,8 +523,8 @@ int main(int argc, char **argv) {
 
   for (int i=0; i<NUM_BUFFERS; i++) {
     glBindTexture(GL_TEXTURE_2D, tex[i]);
-    fill(buffer);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, TEX_W, TEX_H, 0, GL_RED, GL_FLOAT, buffer);
+    fill(&buffer[i*TEX_W*TEX_H]);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, TEX_W, TEX_H, 0, GL_RED, GL_FLOAT, &buffer[i*TEX_W*TEX_H]);
     glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST );
     glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
   }
@@ -537,17 +535,13 @@ int main(int argc, char **argv) {
   GLuint colormap_c = glGetUniformLocation(shader_prog, "colormap_c");
   GLuint colormap_d = glGetUniformLocation(shader_prog, "colormap_d");
 
-  float a[4][3] = { {0.5f, 0.5f, 0.5f }, {0.5f, 0.5f, 0.5f },
-                    {0.0f, 0.0f, 0.0f }, {0.5f, 0.5f, 0.5f }};
+  float a[4][3] = { {0.5f, 0.5f, 0.5f }, {0.5f, 0.5f, 0.5f }, {0.0f, 0.0f, 0.0f }, {0.5f, 0.5f, 0.5f }};
 
-  float b[4][3] = { {0.5f,  0.5f, 0.5f },{ 0.5f, 0.5f, 0.5f },
-                    {-1.0f,-1.0f,-1.0f },{-0.5f,-0.5f,-0.5f }};
+  float b[4][3] = { {0.5f,  0.5f, 0.5f },{ 0.5f, 0.5f, 0.5f }, {-1.0f,-1.0f,-1.0f },{-0.5f,-0.5f,-0.5f }};
 
-  float c[4][3] = { {1.0f, 1.0f, 1.0f }, {2.0f, 1.0f, 0.0f },
-                    {1.0f, 1.0f, 1.0f }, {1.0f, 1.0f, 1.0f }};
+  float c[4][3] = { {1.0f, 1.0f, 1.0f }, {2.0f, 1.0f, 0.0f }, {1.0f, 1.0f, 1.0f }, {1.0f, 1.0f, 1.0f }};
 
-  float d[4][3] = { {0.0f,0.33f,0.67f }, {0.5f, 0.2f, 0.25f},
-                    {0.0f, 0.0f, 0.0f }, {0.0f, 0.0f, 0.0f }};
+  float d[4][3] = { {0.0f,0.33f,0.67f }, {0.5f, 0.2f, 0.25f}, {0.0f, 0.0f, 0.0f }, {0.0f, 0.0f, 0.0f }};
 
   glfwSetCursorPosCallback(window, mouse_pos_callback);
   glfwSetMouseButtonCallback(window, mouse_btn_callback);
@@ -556,6 +550,11 @@ int main(int argc, char **argv) {
   /* main loop */
   int vsync = 1;
   glfwSwapInterval(vsync);
+
+  gl_ok=1; t0 = get_time();
+  pthread_t work_thread;
+
+  if (pthread_create(&work_thread, NULL, work, NULL)) { fprintf(stderr, "couln't create a thread\n"); return -1; }
 
   while (!glfwWindowShouldClose(window)) {
 
@@ -585,10 +584,14 @@ int main(int argc, char **argv) {
     glfwSwapBuffers(window);
   }
 
+  gl_ok=0;
   glfwTerminate();
   glDeleteBuffers(1, &vbo);
   glDeleteBuffers(1, &tex_vbo);
   glDeleteTextures(NUM_BUFFERS, tex);
+
+  if (pthread_join(work_thread, NULL)) {
+  printf("pthread_join error\n"); return -2; }
 
   if (NULL != img) free(img);
   return 0;
@@ -598,8 +601,16 @@ void *work(void *args) {
   while (!gl_ok) usleep(10);
   {
     while (gl_ok) {
-      //work();
-      printf("work\n");
+      //fill(buffer);
+      for (int r=5; r<TEX_H-5; r++)
+      for (int c=5; c<TEX_W-5; c++) {
+        u16 i=r*TEX_W+c;
+        buffer[i+tex_no*TEX_W*TEX_H] = 0;
+      }
+      //texupdate();
+      usleep(100000);
+
+      printf("[%12.6f s] work\n", get_time() - t0);
     }
   }
   return 0;
