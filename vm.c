@@ -28,9 +28,11 @@ double get_time() {
 #include <GLFW/glfw3.h>
 GLuint tex[NUM_BUFFERS];
 float buffer[4 * TEX_W * TEX_H];
+int tex_update_needed = 1;
 int tex_no = 0;
 double t0;
 int gl_ok=0;
+char debug_msg[256] = "\0";
 #define AUTO_REFRESH 60
 #define OFFSET 64
 static GLFWwindow* window;
@@ -80,6 +82,8 @@ void tick(another_vm *vm, u8 *code) {
   printf("[tick: %u, pc=0x%04x] ", vm->ticks, vm->pc);
   u8 op = F8;
   printf("op=0x%02x ", op);
+
+  sprintf(debug_msg, "[%u, pc=0x%04x, op=0x%02x]", vm->ticks, vm->pc, op);
   u8 arg0, arg1;
   u16 arg;
 
@@ -289,18 +293,32 @@ void load_shaders(GLuint *v, const char *vf,
     x; \
   } while (0)
 
-void fill(float *buf) {
-  for (int row=0; row<TEX_H; row++)
-    for (int j=0; j<TEX_W; j++) {
-      buf[j+row*TEX_W] = rand() / (float)(RAND_MAX + 1.0f);
-    }
+void fill(float *buf, size_t len) {
+  for (size_t j=0; j<len; j++) {
+    buf[j] = rand() / (float)(RAND_MAX + 1.0f);
+  }
 }
 
+//void texupdate() {
+//
+//  printf("tex %d update\n", tex_no);
+//  for (int j=0; j<4; j++)
+//  {
+//    glBindTexture(GL_TEXTURE_2D, tex[j]);
+//    for (int i=0; i<TEX_W*TEX_H*4; i++) buffer[i] = (float)(buffer8[i])/255.0f;
+//    glTexSubImage2D( GL_TEXTURE_2D, 0, 0, 0, TEX_W, TEX_H, GL_RED, GL_FLOAT, &buffer[j*TEX_W*TEX_H] );
+//  }
 void texupdate() {
 
-  glBindTexture(GL_TEXTURE_2D, tex[tex_no]);
-  //for (int i=0; i<TEX_W*TEX_H; i++) buffer[i] = buffer[tex_no][i];
-  glTexSubImage2D( GL_TEXTURE_2D, 0, 0, 0, TEX_W, TEX_H, GL_RED, GL_FLOAT, &buffer[tex_no*TEX_W*TEX_H] );
+  printf("tex %d update\n", tex_no);
+  //{
+    glBindTexture(GL_TEXTURE_2D, tex[0]);
+    //int rr = j / 2;
+    //int cc = j % 2;
+    //for (int i=0; i<TEX_W*TEX_H; i++) buffer[rr*TEX_H*TEX_W+i+TEX_W*cc] = (float)(buffer8[rr*TEX_H*TEX_W+i+TEX_W*cc])/255.0f;
+    for (int i=0; i<4*TEX_W*TEX_H; i++) buffer[i] = (float)(buffer8[i])/255.0f;
+    glTexSubImage2D( GL_TEXTURE_2D, 0, 0, 0, TEX_W, 4*TEX_H, GL_RED, GL_FLOAT, buffer );
+  //}
 
 }
 
@@ -344,7 +362,7 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
       case GLFW_KEY_0:
         texupdate(); break;
       case GLFW_KEY_1:
-        fill(&buffer[tex_no*TEX_W*TEX_H]); texupdate(); break;
+        fill(buffer, 4*PAGE_SIZE); texupdate(); break;
       default:
       break;
     }
@@ -361,7 +379,7 @@ static GLFWwindow* open_window(const char* title, GLFWwindow* share, int posX, i
     GLFWwindow* window;
 
     //glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
-    window = glfwCreateWindow(TEX_W, TEX_H, title, NULL, share);
+    window = glfwCreateWindow(TEX_W, 4*TEX_H, title, NULL, share);
     if (!window) return NULL;
 
     glfwMakeContextCurrent(window);
@@ -377,6 +395,7 @@ static GLFWwindow* open_window(const char* title, GLFWwindow* share, int posX, i
     return window;
 
 }
+
 int display_init() {
 
   int x, y, width;
@@ -467,7 +486,7 @@ int main(int argc, char **argv) {
   GLFW_OPENGL_CORE_PROFILE);
 
   window = glfwCreateWindow(
-    width, height, "GLSL test", NULL, NULL);
+    width, 4*height, "GLSL test", NULL, NULL);
 
   if (!window) {
     fprintf(stderr,
@@ -475,6 +494,8 @@ int main(int argc, char **argv) {
     glfwTerminate();
     return -1;
   }
+
+  glfwSetWindowPos(window, OFFSET, OFFSET);
 
   glfwMakeContextCurrent(window);
   renderer = glGetString(GL_RENDERER);
@@ -521,13 +542,26 @@ int main(int argc, char **argv) {
   glGenTextures( NUM_BUFFERS, tex );
   glActiveTexture(GL_TEXTURE0);
 
-  for (int i=0; i<NUM_BUFFERS; i++) {
-    glBindTexture(GL_TEXTURE_2D, tex[i]);
-    fill(&buffer[i*TEX_W*TEX_H]);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, TEX_W, TEX_H, 0, GL_RED, GL_FLOAT, &buffer[i*TEX_W*TEX_H]);
+  //for (int i=0; i<NUM_BUFFERS; i++) {
+    glBindTexture(GL_TEXTURE_2D, tex[0]);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, TEX_W, 4*TEX_H, 0, GL_RED, GL_FLOAT, buffer);
     glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST );
     glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  //}
+
+  fill(buffer, TEX_W*4*TEX_H);
+  for (int j=0; j<4; j++)
+  for (int r=0; r<TEX_H; r++)
+  for (int c=0; c<TEX_W; c++) {
+    u16 i=r*TEX_W+c;
+    if (j==0) buffer8[i+j*TEX_W*TEX_H] = 128;
+    if (j==1) buffer8[i+j*TEX_W*TEX_H] = 64;
+    if (j==2) buffer8[i+j*TEX_W*TEX_H] = 48;
+    if (j==3) buffer8[i+j*TEX_W*TEX_H] = 96;
+    //buffer8[i+j*TEX_W*TEX_H] = j==0?(u8)(buffer[i+j*TEX_W*TEX_H]*255.0f) : 200.0f;
+    printf("i=%d, b8=%u, b=%f\n", i+j*TEX_W*TEX_H, buffer8[i+j*TEX_W*TEX_H], buffer[i+j*TEX_W*TEX_H]);
   }
+  tex_update_needed=1;
 
   GLuint cursor     = glGetUniformLocation(shader_prog, "cursor");
   GLuint colormap_a = glGetUniformLocation(shader_prog, "colormap_a");
@@ -568,6 +602,12 @@ int main(int argc, char **argv) {
     glBindVertexArray(vao);
     glBindTexture(GL_TEXTURE_2D, tex[tex_no]);
 
+    if (1 == tex_update_needed) {
+      texupdate(); tex_update_needed = 0;
+    }
+
+    glfwSetWindowTitle(window, debug_msg);
+
     glUniform2f(cursor,     mx, my);
     glUniform3f(colormap_a, a[mode][0], a[mode][1], a[mode][2]);
     glUniform3f(colormap_b, b[mode][0], b[mode][1], b[mode][2]);
@@ -598,20 +638,31 @@ int main(int argc, char **argv) {
 }
 
 void *work(void *args) {
-  while (!gl_ok) usleep(10);
-  {
-    while (gl_ok) {
-      //fill(buffer);
-      for (int r=5; r<TEX_H-5; r++)
-      for (int c=5; c<TEX_W-5; c++) {
-        u16 i=r*TEX_W+c;
-        buffer[i+tex_no*TEX_W*TEX_H] = 0;
-      }
-      //texupdate();
-      usleep(100000);
 
-      printf("[%12.6f s] work\n", get_time() - t0);
-    }
+  while (!gl_ok) usleep(10);
+
+  byte_array palette, bytecode, polygons;
+  read_array(&palette,  "file17");
+  read_array(&bytecode, "file18");
+  read_array(&polygons, "file19");
+
+  u32 MAX_TICKS = 4;
+
+  another_vm vm;
+  memset(&vm, 0, sizeof vm);
+
+  int i=0;
+  while (gl_ok && i<MAX_TICKS) {
+    tick(&vm, bytecode.bytes);
+    tex_update_needed=1;
+    usleep(10000);
+
+    printf("[%12.6f s] work\n", get_time() - t0);
+    i++;
   }
+
+  free(palette.bytes);
+  free(bytecode.bytes);
+  free(polygons.bytes);
   return 0;
 }
