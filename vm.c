@@ -30,6 +30,7 @@ GLuint tex[NUM_BUFFERS];
 float buffer[4 * TEX_W * TEX_H];
 int tex_update_needed = 1;
 int tex_no = 0;
+int paused = 0;
 double t0;
 int gl_ok=0;
 char debug_msg[256] = "\0";
@@ -46,6 +47,7 @@ typedef struct {
   u8 regs[256];
   u16 pc;
   u32 ticks;
+  u8 current_fb;
 } another_vm;
 
 u8 page_front;
@@ -63,7 +65,6 @@ u8 get_page(u8 num) {
     case 0x0 ... 0x3: return num; break;
     default: printf("illegal page\n"); return 0; break;
   }
-
 }
 
 void fill_buf(u8 *buf, u16 len, u8 val) {
@@ -74,6 +75,10 @@ void fill_page(u8 num, u8 color) {
   printf("fill page(page=0x%02x, color=0x%02x)\n", num, color);
   u8 pg = get_page(num);
   fill_buf(buffer8+pg*PAGE_SIZE, PAGE_SIZE, color);
+}
+
+void update_display(u8 num) {
+  printf("update display(num=0x%02x)\n", num);
 }
 
 #define F8 (code[vm->pc++])
@@ -105,10 +110,22 @@ void tick(another_vm *vm, u8 *code) {
           printf("CALL 0x%04x\n", arg);
           vm->pc = arg;
           break;
+        case 0xd:
+          // SELECT fb
+          arg0 = F8;
+          printf("SELECT FB (%02x), prev=%02x\n", arg0, vm->current_fb);
+          vm->current_fb = arg0;
+          break;
         case 0xe:
           // FILL page
           arg0 = F8; arg1 = F8;
           fill_page(arg0, arg1);
+          break;
+        case 0x10:
+          // update display
+          arg0 = F8;
+          vm->regs[0xf7] = 0;
+          update_display(arg0);
           break;
         default:
           printf("NOT IMPLEMENTED!\n");
@@ -211,28 +228,6 @@ void draw_poly_background(u8 op0, u8 op1, u8 x, u8 y, u8 *p) {
   draw_shape(p, offset, 0xff, 64, x, y);
 }
 
-//int main(int argc, char **argv) {
-//
-//  byte_array palette, bytecode, polygons;
-//  read_array(&palette,  "file17");
-//  read_array(&bytecode, "file18");
-//  read_array(&polygons, "file19");
-//
-//  u32 MAX_TICKS = 2;
-//
-//  another_vm vm;
-//  memset(&vm, 0, sizeof vm);
-//
-//  for (u32 i=0; i<MAX_TICKS; i++)
-//    tick(&vm, bytecode.bytes);
-//
-//  free(palette.bytes);
-//  free(bytecode.bytes);
-//  free(polygons.bytes);
-//
-//  return 0;
-//}
-
 const char *vs_name = "./glsl/tex_vs.glsl";
 const char *fs_name = "./glsl/tex_fs.glsl";
 
@@ -299,26 +294,12 @@ void fill(float *buf, size_t len) {
   }
 }
 
-//void texupdate() {
-//
-//  printf("tex %d update\n", tex_no);
-//  for (int j=0; j<4; j++)
-//  {
-//    glBindTexture(GL_TEXTURE_2D, tex[j]);
-//    for (int i=0; i<TEX_W*TEX_H*4; i++) buffer[i] = (float)(buffer8[i])/255.0f;
-//    glTexSubImage2D( GL_TEXTURE_2D, 0, 0, 0, TEX_W, TEX_H, GL_RED, GL_FLOAT, &buffer[j*TEX_W*TEX_H] );
-//  }
 void texupdate() {
 
   printf("tex %d update\n", tex_no);
-  //{
-    glBindTexture(GL_TEXTURE_2D, tex[0]);
-    //int rr = j / 2;
-    //int cc = j % 2;
-    //for (int i=0; i<TEX_W*TEX_H; i++) buffer[rr*TEX_H*TEX_W+i+TEX_W*cc] = (float)(buffer8[rr*TEX_H*TEX_W+i+TEX_W*cc])/255.0f;
-    for (int i=0; i<4*TEX_W*TEX_H; i++) buffer[i] = (float)(buffer8[i])/255.0f;
-    glTexSubImage2D( GL_TEXTURE_2D, 0, 0, 0, TEX_W, 4*TEX_H, GL_RED, GL_FLOAT, buffer );
-  //}
+  glBindTexture(GL_TEXTURE_2D, tex[0]);
+  for (int i=0; i<4*TEX_W*TEX_H; i++) buffer[i] = (float)(buffer8[i])/255.0f;
+  glTexSubImage2D( GL_TEXTURE_2D, 0, 0, 0, TEX_W, 4*TEX_H, GL_RED, GL_FLOAT, buffer );
 
 }
 
@@ -345,7 +326,6 @@ void mouse_pos_callback(GLFWwindow* window, double x, double y) {
   my = y/(double)height;
   xpos = (int)(mx * TEX_W);
   ypos = (int)(my * TEX_H);
-  //printf("%f %f, %f %f, data[%d][%d] = %f\n", x, y, mx, my, ypos, xpos, data[tex_no][xpos + ypos*TEX_W]);
 }
 
 int mode = 1;
@@ -422,21 +402,6 @@ int display_init() {
   gl_ok=0;
 
   return 0;
-}
-
-int main2(int argc, char **argv) {
-
-  pthread_t work_thread;
-
-  if (pthread_create(&work_thread, NULL, work, NULL)) { fprintf(stderr, "couln't create a thread\n"); return -1; }
-
-  display_init();
-
-  if (pthread_join(work_thread, NULL)) {
-  printf("pthread_join error\n"); return -2; }
-
-  return 0;
-
 }
 
 int main(int argc, char **argv) {
@@ -558,8 +523,6 @@ int main(int argc, char **argv) {
     if (j==1) buffer8[i+j*TEX_W*TEX_H] = 64;
     if (j==2) buffer8[i+j*TEX_W*TEX_H] = 48;
     if (j==3) buffer8[i+j*TEX_W*TEX_H] = 96;
-    //buffer8[i+j*TEX_W*TEX_H] = j==0?(u8)(buffer[i+j*TEX_W*TEX_H]*255.0f) : 200.0f;
-    printf("i=%d, b8=%u, b=%f\n", i+j*TEX_W*TEX_H, buffer8[i+j*TEX_W*TEX_H], buffer[i+j*TEX_W*TEX_H]);
   }
   tex_update_needed=1;
 
@@ -588,7 +551,7 @@ int main(int argc, char **argv) {
   gl_ok=1; t0 = get_time();
   pthread_t work_thread;
 
-  if (pthread_create(&work_thread, NULL, work, NULL)) { fprintf(stderr, "couln't create a thread\n"); return -1; }
+  if (pthread_create(&work_thread, NULL, work, argv[1])) { fprintf(stderr, "couln't create a thread\n"); return -1; }
 
   while (!glfwWindowShouldClose(window)) {
 
@@ -646,18 +609,23 @@ void *work(void *args) {
   read_array(&bytecode, "file18");
   read_array(&polygons, "file19");
 
-  u32 MAX_TICKS = 4;
+  u32 DEFAULT_TICKS = 4;
+  u32 ticks = args ? strtoul((char*)args, NULL, 10) : DEFAULT_TICKS;
+  u32 MAX_TICKS = ticks;
+
+  printf("MAX_TICKS=%u\n", MAX_TICKS);
 
   another_vm vm;
   memset(&vm, 0, sizeof vm);
 
   int i=0;
   while (gl_ok && i<MAX_TICKS) {
+    if (1==paused) { usleep(1000); continue; }
+    printf("[%12.6f s] ", get_time() - t0);
     tick(&vm, bytecode.bytes);
     tex_update_needed=1;
     usleep(10000);
 
-    printf("[%12.6f s] work\n", get_time() - t0);
     i++;
   }
 
