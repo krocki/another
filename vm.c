@@ -8,7 +8,11 @@
 
 typedef struct {
   int id;
+  int x, y;
 } vertex;
+
+#define MAX_VERTICES 256
+vertex vertices[MAX_VERTICES];
 
 typedef struct {
   s16 regs[256];
@@ -28,6 +32,8 @@ u8 page_current;
 u8 buffer8[PAGE_SIZE * 4];
 
 u8 palette[16] = { 8, 64, 128, 32, 40, 48, 56, 64, 72, 80, 88, 96, 104, 112, 120, 128};
+
+void draw_shape(u8 *p, u16 offset, u8 color, u8 zoom, u8 x, u8 y);
 
 void put_pixel(u8 page, u16 x, u16 y, u8 color) {
   u16 offset = page*PAGE_SIZE + (y*SCR_W+x);
@@ -89,7 +95,7 @@ s16 to_signed(u16 value, u16 bits) {
 #define F8  (code[vm->pc++])
 #define F16 (F8 << 8 | F8)
 
-void tick(another_vm *vm, u8 *code) {
+void tick(another_vm *vm, u8 *pal, u8 *code, u8 *polygons1, u8 *polygons2) {
 
   printf("[tick: %u, pc=0x%04x] ", vm->ticks, vm->pc);
   u8 op = F8;
@@ -102,6 +108,10 @@ void tick(another_vm *vm, u8 *code) {
   switch (op) {
     case 0x80 ... 0xff:
       printf("DRAW_POLY_BACKGROUND\n");
+      arg = ((((u16)op) << 8 | F8) << 1) & 0xfffe;
+      arg0 = F8; arg1 = F8;
+      if ((arg1 - 199) > 0) { arg0 += arg1 - 199; arg0 = 199; }
+      draw_shape(polygons1, arg, 0xff, 64, arg0, arg1);
       break;
     case 0x40 ... 0x7f:
       printf("DRAW_POLY_SPRITE\n");
@@ -186,16 +196,28 @@ void tick(another_vm *vm, u8 *code) {
   vm->ticks++;
 }
 
-void draw_shape(u8 *p, u16 offset, u8 color, u8 zoom, u8 x, u8 y);
-
 u8 current_page0 = 0;
 
 void draw_point(u8 pg, u8 color, u8 x, u8 y) {
   printf("draw_point pg=%x, color=%x, x=%x, y=%x\n", pg, color, x, y);
 }
 
-void draw_polygon(u8 pg, u8 color, vertex *vertices) {
-  printf("draw_polygon pg=%x, color=%x, vertices=%p\n", pg, color, vertices);
+void draw_polygon(u8 pg, u8 color, vertex *v, u8 n) {
+  int i=0;
+  int j=n-1;
+  int a = v[i].y; int b = v[j].y;
+  int l = a < b ? a : b;
+  int f2 = v[i++].x;
+  int f1 = v[j--].x;
+  printf("i=%d, j=%d, a=%d, b=%d, l=%d, f2=%d, f1=%d\n", i, j, a, b, l, f2, f1);
+
+  for (int c=n-2; c!=0; c-=2) {
+    int h1 = v[j].y - v[j+1].y;
+    printf("c=%d, h1=%d\n", c, h1);
+  }
+  for (int ii=0; ii<n; ii++) {
+    printf("drawing vertex %d x=%d, y=%d\n", ii, v[ii].x, v[ii].y);
+  }
 }
 
 void fill_polygon(u8 *data, u16 offset, u8 color, u8 zoom, u8 x, u8 y) {
@@ -214,17 +236,15 @@ void fill_polygon(u8 *data, u16 offset, u8 color, u8 zoom, u8 x, u8 y) {
   u8 count = data[offset++];
   printf("fill_polygon w=0x%04x h=0x%04x x=0x%04x y=0x%04x cnt=%d\n", w, h, x, y, count);
 
-  vertex *vertices = NULL;
-
-  for (u16 i=0; i<=count; i++) {
+  for (u16 i=0; i<count; i++) {
     int vx = x1 + ((data[offset++] * zoom/64)) * SCALE;
     int vy = y1 + ((data[offset++] * zoom/64)) * SCALE;
-    printf("vertex %d x1=%d y1=%d vx=%d, vy=%d\n", i, x1, y1, vx, vy);
+    vertices[i] = (vertex){.id=i, .x=vx, .y=vy};
   }
   if (4 == count && 0 == w & h <=1 ) {
     draw_point(current_page0, color, x1, y1);
   } else {
-    draw_polygon(current_page0, color, vertices);
+    draw_polygon(current_page0, color, vertices, count);
   }
 
 }
@@ -254,7 +274,7 @@ void draw_shape(u8 *data, u16 offset, u8 color, u8 zoom, u8 x, u8 y) {
 
   printf("draw_shape offset=0x%04x\n", offset);
   u8 code = data[offset++];
-  printf("draw_shape code=0x%04x\n", code);
+  printf("draw_shape code=0x%04x %02x\n", code, data[0]);
   if (code >= 0xc0) {
     if (color & 0x80) {
       color = code & 0x3f;
@@ -290,7 +310,7 @@ void *work(void *args) {
   byte_array palette, bytecode, polygons;
   read_array(&palette,  "file17");
   read_array(&bytecode, "file18");
-  read_array(&polygons, "file19");
+  read_array(&polygons, "./dump/poly19");
   init_bitmaps();
 
   u32 DEFAULT_TICKS = 4;
@@ -306,7 +326,7 @@ void *work(void *args) {
   while (gl_ok) {
     if (1==paused) { if (1!=step) {usleep(1000); continue; } else {step=0;}}
     printf("[%12.6f s] ", get_time() - t0);
-    tick(&vm, bytecode.bytes);
+    tick(&vm, palette.bytes, bytecode.bytes, polygons.bytes, NULL);
     tex_update_needed=1;
     usleep(10000);
     if (i>=MAX_TICKS) paused=1;
