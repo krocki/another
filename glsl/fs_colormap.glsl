@@ -10,11 +10,11 @@ out vec4 frag_color;
 
 vec4 colormap(float v) {
 
-  //vec3 c = colormap_a + colormap_b * cos(6.28318 * (colormap_c * vec3(v, v, v) + colormap_d));
+  vec3 c = colormap_a + colormap_b * cos(6.28318 * (colormap_c * vec3(v, v, v) + colormap_d));
 
-  //return vec4(c, 1.0f);
+  return vec4(c, 1.0f);
   // gray
-  return vec4(v, v, v, 1.0f);
+  //return vec4(v, v, v, 1.0f) + 0.5f;
 }
 
 vec4 val(float v) {
