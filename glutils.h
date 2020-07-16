@@ -1,3 +1,4 @@
+#define GLFW_TRUE 1
 #define NUM_BUFFERS 4
 #define USE_TEX 1
 #define TEX_W (SCR_W / SCALE)
@@ -17,6 +18,8 @@ void mouse_btn_callback(GLFWwindow* window, int button, int action, int mods);
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
 void *work(void *args);
 void texupdate();
+
+float palette_rgb[3*16];
 
 double get_time() {
   struct timeval tv; gettimeofday(&tv, NULL);
@@ -245,6 +248,27 @@ int display_init(int argc, char **argv) {
 
   if (pthread_create(&work_thread, NULL, work, argv[1])) { fprintf(stderr, "couln't create a thread\n"); return -1; }
 
+  GLuint palette = glGetUniformLocation(shader_prog, "palette");
+
+  //palette_rgb[3*16] = {
+  //  0,     0,     0.00f,
+  //  1,     1,     0.67f,
+  //  1,     1    , 0.53f,
+  //  1,     0.93f, 0.47f,
+  //  1,     0.93f, 0.33f,
+  //  0.93f, 0.87f, 0.27f,
+  //  0.87f, 0.67f, 0.20f,
+  //  0.80f, 0.67f, 0.13f,
+  //  0.73f, 0.60f, 0.13f,
+  //  0.67f, 0.53f, 0.07f,
+  //  0.60f, 0.47f, 0.00f,
+  //  0.53f, 0.40f, 0.00f,
+  //  0.47f, 0.33f, 0.00f,
+  //  0.40f, 0.27f, 0.00f,
+  //  0.33f, 0.20f, 0.00f,
+  //  0.47f, 0.53f, 0.47f
+  //};
+
   while (!glfwWindowShouldClose(window)) {
 
     /* clear */
@@ -262,6 +286,8 @@ int display_init(int argc, char **argv) {
     }
 
     glfwSetWindowTitle(window, debug_msg);
+
+    glUniform1fv(palette, 16*3, palette_rgb);
 
     /* draw */
     glDrawArrays(GL_TRIANGLES, 0, 6);

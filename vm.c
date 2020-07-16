@@ -1,18 +1,6 @@
 #include "defs.h"
 #include "bitmaps.h"
-
-#define SCALE 1
-#define SCR_W 320
-#define SCR_H 200
-#define PAGE_SIZE (SCR_W*SCR_H)
-
-typedef struct {
-  int id;
-  int x, y;
-} vertex;
-
-#define MAX_VERTICES 256
-vertex vertices[MAX_VERTICES];
+#include "polygon.h"
 
 typedef struct {
   s16 regs[256];
@@ -25,19 +13,21 @@ typedef struct {
   u8 task_paused;
 } another_vm;
 
+u32 pal32[16];
+
 u8 page_front;
 u8 page_back;
 u8 page_current;
 
 u8 buffer8[PAGE_SIZE * 4];
-
-u8 palette[16] = { 8, 64, 128, 32, 40, 48, 56, 64, 72, 80, 88, 96, 104, 112, 120, 128};
+u32 buffer32[PAGE_SIZE * 4];
 
 void draw_shape(u8 *p, u16 offset, u8 color, u8 zoom, u8 x, u8 y);
 
 void put_pixel(u8 page, u16 x, u16 y, u8 color) {
   u16 offset = page*PAGE_SIZE + (y*SCR_W+x);
-  buffer8[offset] = palette[color];
+  buffer8[offset] = color;
+  buffer32[offset] = pal32[color];
 }
 
 void draw_bitmap(u8 id) {
@@ -90,6 +80,25 @@ void update_display(u8 num) {
 s16 to_signed(u16 value, u16 bits) {
   u16 mask = 1 << (bits - 1);
   return value - ((value & mask) << 1);
+}
+
+extern float palette_rgb[48];
+void set_palette(u8 *p, u8 v) {
+  printf("set palette %d\n", v);
+  int offset = 32 * v;
+  for (int i=0; i<16; i++) {
+    int color = p[offset+i*2] << 8 | p[offset+i*2+1];
+    int r = (color >> 8) & 15;
+    int g = (color >> 4) & 15;
+    int b =  color       & 15;
+    r = (r<<4) | r;
+    g = (g<<4) | g;
+    b = (b<<4) | b;
+    pal32[i] = 0xff000000 | (b<<16) | (g<<8) | r;
+    palette_rgb[i*3] = r/255.0;
+    palette_rgb[i*3+1] = g/255.0;
+    palette_rgb[i*3+2] = b/255.0;
+  }
 }
 
 #define F8  (code[vm->pc++])
@@ -160,6 +169,11 @@ void tick(another_vm *vm, u8 *pal, u8 *code, u8 *polygons1, u8 *polygons2) {
           vm->tasks[arg0] = arg;
           printf("install task [%u] = 0x%04x\n", arg0, arg);
           break;
+        case 0xb:
+          // SET PALETTE
+          arg = F16;
+          set_palette(pal, arg >> 8);
+          break;
         case 0xd:
           // SELECT fb
           arg0 = F8;
@@ -194,59 +208,6 @@ void tick(another_vm *vm, u8 *pal, u8 *code, u8 *polygons1, u8 *polygons2) {
       break;
   }
   vm->ticks++;
-}
-
-u8 current_page0 = 0;
-
-void draw_point(u8 pg, u8 color, u8 x, u8 y) {
-  printf("draw_point pg=%x, color=%x, x=%x, y=%x\n", pg, color, x, y);
-}
-
-void draw_polygon(u8 pg, u8 color, vertex *v, u8 n) {
-  int i=0;
-  int j=n-1;
-  int a = v[i].y; int b = v[j].y;
-  int l = a < b ? a : b;
-  int f2 = v[i++].x;
-  int f1 = v[j--].x;
-  printf("i=%d, j=%d, a=%d, b=%d, l=%d, f2=%d, f1=%d\n", i, j, a, b, l, f2, f1);
-
-  for (int c=n-2; c!=0; c-=2) {
-    int h1 = v[j].y - v[j+1].y;
-    printf("c=%d, h1=%d\n", c, h1);
-  }
-  for (int ii=0; ii<n; ii++) {
-    printf("drawing vertex %d x=%d, y=%d\n", ii, v[ii].x, v[ii].y);
-  }
-}
-
-void fill_polygon(u8 *data, u16 offset, u8 color, u8 zoom, u8 x, u8 y) {
-
-  printf("fill_polygon=0x%04x\n", offset);
-  u8 w = (data[offset++] * zoom/64);
-  u8 h = (data[offset++] * zoom/64);
-  int x1 = (x * SCALE - w * SCALE/2 );
-  int x2 = (x * SCALE + w * SCALE/2 );
-  int y1 = (y * SCALE - h * SCALE/2 );
-  int y2 = (y * SCALE + h * SCALE/2 );
-
-  if ( x1 >= SCR_W || x2 < 0 || y1 >= SCR_H || y2 < 0)
-    return;
-
-  u8 count = data[offset++];
-  printf("fill_polygon w=0x%04x h=0x%04x x=0x%04x y=0x%04x cnt=%d\n", w, h, x, y, count);
-
-  for (u16 i=0; i<count; i++) {
-    int vx = x1 + ((data[offset++] * zoom/64)) * SCALE;
-    int vy = y1 + ((data[offset++] * zoom/64)) * SCALE;
-    vertices[i] = (vertex){.id=i, .x=vx, .y=vy};
-  }
-  if (4 == count && 0 == w & h <=1 ) {
-    draw_point(current_page0, color, x1, y1);
-  } else {
-    draw_polygon(current_page0, color, vertices, count);
-  }
-
 }
 
 void draw_shape_parts(u8 *data, u16 offset, u8 zoom, u8 x, u8 y) {
@@ -313,7 +274,7 @@ void *work(void *args) {
   read_array(&polygons, "./dump/poly19");
   init_bitmaps();
 
-  u32 DEFAULT_TICKS = 4;
+  u32 DEFAULT_TICKS = 50;
   u32 ticks = args ? strtoul((char*)args, NULL, 10) : DEFAULT_TICKS;
   u32 MAX_TICKS = ticks;
 
