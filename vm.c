@@ -15,6 +15,8 @@ typedef struct {
   int pc;
   int paused;
   int ticks;
+  u16 stack[256];
+  u8 stack_ptr;
 } task;
 
 #define NUM_TASKS 64
@@ -26,17 +28,47 @@ typedef struct {
 
 void init_tasks(vm *v) {
   for (int i=0; i<NUM_TASKS; i++) {
-    v->tasks[i] = (task){ -1, 0, 0 };
+    v->tasks[i] = (task){ -1, 0, 0, {0}, 0 };
   }
   v->tasks[0].pc = 0;
 }
 
+void print_stack(task *t) {
+  printf("stack: ");
+  for (int i=t->stack_ptr; i>0; i--) {
+    printf("%d: 0x%04x ", i-1, t->stack[i]);
+  }
+}
+
+#define F8(c, t) ((c)[(t)->pc++])
+#define F16(c, t) (F8(c,t) << 8 | F8(c,t))
+#define PUSH(t, v) ((t)->stack[(t)->stack_ptr++] = (v))
+#define POP(t) ((t)->stack[--((t)->stack_ptr)])
+
+/* jump table */
 void *ops[256];
 void unk(task *t, u8 *p, u8 *c, u8 *poly) { printf("unimplemented"); }
+
+void call(task *t, u8 *p, u8 *c, u8 *poly) {
+  u16 arg = F16(c, t);
+  printf("call 0x%04x ", arg);
+  PUSH(t, t->pc);
+  t->pc = arg;
+  print_stack(t);
+}
+
+void ret(task *t, u8 *p, u8 *c, u8 *poly) {
+  u16 prev_pc = POP(t);
+  t->pc = prev_pc;
+  print_stack(t);
+}
+
 void yield(task *t, u8 *p, u8 *c, u8 *poly) { printf("yield"); t->paused = 1; }
 
 void init_ops(void(* def)(task*,u8*,u8*,u8*)) {
   for (int i=0; i<256; i++) ops[i] = def;
+  ops[0x04] = &call;
+  ops[0x05] = &ret;
   ops[0x06] = &yield;
 }
 
