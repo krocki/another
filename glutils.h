@@ -38,7 +38,7 @@ int tex_update_needed = 1;
 int tex_no = 0;
 int paused = 0;
 int step = 0;
-int mode = 1;
+int mode = 0;
 double t0;
 int gl_ok=0;
 char debug_msg[256] = "\0";
@@ -157,7 +157,7 @@ int display_init(int argc, char **argv) {
   GLFW_OPENGL_CORE_PROFILE);
 
   //window = glfwCreateWindow( width, 4*height, "GLSL test", NULL, NULL);
-  window = glfwCreateWindow( 2*width, 2*height, "Another VM", NULL, NULL);
+  window = glfwCreateWindow( width, 4*height, "Another VM", NULL, NULL);
 
   if (!window) {
     fprintf(stderr,
@@ -216,7 +216,7 @@ int display_init(int argc, char **argv) {
   //for (int i=0; i<NUM_BUFFERS; i++) {
     glBindTexture(GL_TEXTURE_2D, tex[0]);
     //glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, TEX_W, 4*TEX_H, 0, GL_RED, GL_FLOAT, buffer);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, TEX_W, TEX_H, 0, GL_RED, GL_FLOAT, buffer);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, TEX_W, 4*TEX_H, 0, GL_RED, GL_FLOAT, buffer);
     glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST );
     glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
   //}
@@ -227,10 +227,7 @@ int display_init(int argc, char **argv) {
   for (int r=0; r<TEX_H; r++)
   for (int c=0; c<TEX_W; c++) {
     u16 i=r*TEX_W+c;
-    if (j==0) buffer8[i+j*TEX_W*TEX_H] = 128;
-    if (j==1) buffer8[i+j*TEX_W*TEX_H] = 64;
-    if (j==2) buffer8[i+j*TEX_W*TEX_H] = 48;
-    if (j==3) buffer8[i+j*TEX_W*TEX_H] = 96;
+    buffer8[i+j*TEX_W*TEX_H] = 0;
   }
   tex_update_needed=1;
 
@@ -249,25 +246,6 @@ int display_init(int argc, char **argv) {
   if (pthread_create(&work_thread, NULL, work, argv[1])) { fprintf(stderr, "couln't create a thread\n"); return -1; }
 
   GLuint palette = glGetUniformLocation(shader_prog, "palette");
-
-  //palette_rgb[3*16] = {
-  //  0,     0,     0.00f,
-  //  1,     1,     0.67f,
-  //  1,     1    , 0.53f,
-  //  1,     0.93f, 0.47f,
-  //  1,     0.93f, 0.33f,
-  //  0.93f, 0.87f, 0.27f,
-  //  0.87f, 0.67f, 0.20f,
-  //  0.80f, 0.67f, 0.13f,
-  //  0.73f, 0.60f, 0.13f,
-  //  0.67f, 0.53f, 0.07f,
-  //  0.60f, 0.47f, 0.00f,
-  //  0.53f, 0.40f, 0.00f,
-  //  0.47f, 0.33f, 0.00f,
-  //  0.40f, 0.27f, 0.00f,
-  //  0.33f, 0.20f, 0.00f,
-  //  0.47f, 0.53f, 0.47f
-  //};
 
   while (!glfwWindowShouldClose(window)) {
 
@@ -316,9 +294,9 @@ void texupdate() {
 
   glBindTexture(GL_TEXTURE_2D, tex[0]);
   //for (int i=0; i<4*TEX_W*TEX_H; i++) buffer[i] = (float)(buffer8[i])/255.0f;
-  for (int i=0; i<TEX_W*TEX_H; i++) buffer[i] = (float)(buffer8[i])/255.0f;
+  for (int i=0; i<4*TEX_W*TEX_H; i++) buffer[i] = (float)(buffer8[i])/255.0f;
   //glTexSubImage2D( GL_TEXTURE_2D, 0, 0, 0, TEX_W, 4*TEX_H, GL_RED, GL_FLOAT, buffer );
-  glTexSubImage2D( GL_TEXTURE_2D, 0, 0, 0, TEX_W, TEX_H, GL_RED, GL_FLOAT, buffer);
+  glTexSubImage2D( GL_TEXTURE_2D, 0, 0, 0, TEX_W, 4*TEX_H, GL_RED, GL_FLOAT, buffer);
 
 }
 
@@ -357,39 +335,13 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
     glfwSetWindowShouldClose(window, GLFW_TRUE);
   else if (action==GLFW_RELEASE) {
     switch(key) {
-      case GLFW_KEY_0:
-        texupdate(); break;
-      case GLFW_KEY_1:
-        step=1; break;
-      default:
-      break;
+      case GLFW_KEY_0: mode=0; break;
+      case GLFW_KEY_1: mode=1; break;
+      case GLFW_KEY_2: mode=2; break;
+      case GLFW_KEY_3: mode=3; break;
+      case GLFW_KEY_SPACE: step=1; break;
+      default: break;
     }
+    texupdate();
   }
 }
-
-//static void change_size_callback(GLFWwindow* window, int width, int height) {
-  //WIDTH = width;
-  //HEIGHT = height;
-//}
-
-//static GLFWwindow* open_window(const char* title, GLFWwindow* share, int posX, int posY) {
-//
-//    GLFWwindow* window;
-//
-//    //glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
-//    window = glfwCreateWindow(TEX_W, 4*TEX_H, title, NULL, share);
-//    if (!window) return NULL;
-//
-//    glfwMakeContextCurrent(window);
-//    glfwSwapInterval(1);
-//    glfwSetWindowPos(window, posX, posY);
-//    glfwShowWindow(window);
-//
-//    glfwSetKeyCallback(window, key_callback);
-//    glfwSetMouseButtonCallback(window, mouse_btn_callback);
-//    glfwSetCursorPosCallback(window, mouse_pos_callback);
-//    glfwSetWindowSizeCallback(window, change_size_callback);
-//
-//    return window;
-//
-//}
