@@ -26,8 +26,6 @@ void draw_point(u8 pg, u8 color, int x, int y) {
   else if (0x10 == color) buffer8[offset] |= 8;
   else buffer8[offset] = color;
   //buffer8[x+SCR_W*y+pg*PAGE_SIZE] = color;
-  if (color < 0x10) printf("Uh-oh! color < 10");
-  tex_update_needed=1;
 }
 
 void draw_line(int pg, int color, int y, int x1, int x2) {
@@ -50,7 +48,6 @@ void draw_line(int pg, int color, int y, int x1, int x2) {
     for (int i=offset+x1; i<offset+x2+1; i++)
       buffer8[i] = color;
   }
-  tex_update_needed=1;
 }
 
 void draw_polygon(u8 pg, u8 color, vertex *v, u8 n) {

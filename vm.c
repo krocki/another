@@ -28,6 +28,7 @@ void set_palette(u8 *p, u8 v) {
 }
 
 #include "glutils.h"
+//#include "glutils4.h"
 
 void *work(void *args);
 
@@ -180,15 +181,15 @@ void update_display(vm *v, task *t, data *d) {
     }
   }
   tex_update_needed=1;
-  printf("update_display 0x%02x", arg0);
-  usleep(40000);
+  //printf("update_display 0x%02x", arg0);
+  usleep(50000);
 }
 
 void install_task(vm *v, task *t, data *d) {
   u8 num = F8(d->bytecode, t);
   u16 off = F16(d->bytecode, t);
   v->tasks[num].next_pc = off;
-  printf("install_task %d -> 0x%04x", num, off);
+  //printf("install_task %d -> 0x%04x", num, off);
 }
 
 void remove_task(vm *v, task *t, data *d) {
@@ -456,7 +457,7 @@ void draw_sprite(vm *v, task *t, data *d, u8 op) {
     }
   }
 
-  printf("draw sprite 0x%04x 0x%02x 0x%02x", offset, x, y);
+  //printf("draw sprite 0x%04x 0x%02x 0x%02x", offset, x, y);
   draw_shape(polydata, offset, 0xff, zoom, x, y);
 }
 
@@ -486,7 +487,6 @@ void execute_task(vm *v, int i, data *d) {
         ((void(*)(vm*, task*, data*))ops[op])(v, t, d);
         break;
     }
-    usleep(500);
   }
 }
 
@@ -532,7 +532,6 @@ void *work(void *args) {
     if (1==paused) { if (1!=step) {usleep(1000); continue; } else {step=0;}}
     putchar('.'); fflush(stdout);
     run_tasks(&vm0, &d);
-    usleep(5000);
     if (i>=MAX_TICKS && MAX_TICKS>0) paused=1;
     i++;
   }

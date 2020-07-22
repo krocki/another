@@ -33,7 +33,7 @@ void fill(float *buf, size_t len) {
 }
 
 GLuint tex[NUM_BUFFERS];
-float buffer[TEX_W * TEX_H];
+float buffer[4 * TEX_W * TEX_H];
 int tex_update_needed = 1;
 int tex_no = 0;
 int paused = 0;
@@ -112,8 +112,8 @@ void load_shaders(GLuint *v, const char *vf,
 
 int display_init(int argc, char **argv) {
 
-  GLuint width = 3*TEX_W;
-  GLuint height = 3*TEX_H;
+  GLuint width = 2*TEX_W;
+  GLuint height = 2*TEX_H;
 
   GLFWwindow *window = NULL;
   const GLubyte *renderer;
@@ -157,7 +157,7 @@ int display_init(int argc, char **argv) {
   GLFW_OPENGL_CORE_PROFILE);
 
   //window = glfwCreateWindow( width, 4*height, "GLSL test", NULL, NULL);
-  window = glfwCreateWindow( width, height, "Another VM", NULL, NULL);
+  window = glfwCreateWindow( 2*width, 2*height, "Another VM", NULL, NULL);
 
   if (!window) {
     fprintf(stderr,
@@ -216,12 +216,12 @@ int display_init(int argc, char **argv) {
   //for (int i=0; i<NUM_BUFFERS; i++) {
     glBindTexture(GL_TEXTURE_2D, tex[0]);
     //glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, TEX_W, 4*TEX_H, 0, GL_RED, GL_FLOAT, buffer);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, TEX_W, TEX_H, 0, GL_RED, GL_FLOAT, buffer);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, 2*TEX_W, 2*TEX_H, 0, GL_RED, GL_FLOAT, buffer);
     glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST );
     glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
   //}
 
-  fill(buffer, TEX_W*TEX_H);
+  fill(buffer, TEX_W*4*TEX_H);
 
   for (int j=0; j<4; j++)
   for (int r=0; r<TEX_H; r++)
@@ -293,10 +293,14 @@ int display_init(int argc, char **argv) {
 void texupdate() {
 
   glBindTexture(GL_TEXTURE_2D, tex[0]);
-
-  u8 idx = current_page0;
-  for (int i=0; i<TEX_W*TEX_H; i++) buffer[i] = (float)(buffer8[idx*PAGE_SIZE+i])/255.0f;
-  glTexSubImage2D( GL_TEXTURE_2D, 0, 0, 0, TEX_W, TEX_H, GL_RED, GL_FLOAT, buffer);
+  //for (int i=0; i<4*TEX_W*TEX_H; i++) buffer[i] = (float)(buffer8[i])/255.0f;
+  for (int k=0; k<4; k++)
+  for (int i=0; i<TEX_H; i++)
+  for (int j=0; j<TEX_W; j++) {
+    buffer[(2*i+k%2)*TEX_W+j+((k>>1)<<1)*TEX_W*TEX_H] = (float)(buffer8[k*TEX_W*TEX_H+i*TEX_W+j])/255.0f;
+  }
+  //glTexSubImage2D( GL_TEXTURE_2D, 0, 0, 0, TEX_W, 4*TEX_H, GL_RED, GL_FLOAT, buffer );
+  glTexSubImage2D( GL_TEXTURE_2D, 0, 0, 0, 2*TEX_W, 2*TEX_H, GL_RED, GL_FLOAT, buffer);
 
 }
 
