@@ -39,6 +39,8 @@ int main(int argc, char **argv) {
 typedef struct {
   int pc;
   int next_pc;
+  int state;
+  int next_state;
   int paused;
   int ticks;
   u16 stack[256];
@@ -73,7 +75,7 @@ void init_vars(vm *v) {
 
 void init_tasks(vm *v) {
   for (int i=0; i<NUM_TASKS; i++) {
-    v->tasks[i] = (task){ -1, -1, 0, 0, {0}, 0 };
+    v->tasks[i] = (task){ -1, -1, 0, 0, 0, 0, {0}, 0 };
   }
   v->tasks[0].pc = 0;
 }
@@ -273,6 +275,21 @@ void addi(vm *v, task *t, data *d) {
   v->vars[n] += imm;
 }
 
+void reset_thr(vm *v, task *t, data *d) {
+  u8 start = F8(d->bytecode, t);
+  u8 end = F8(d->bytecode, t);
+  u8 state = F8(d->bytecode, t);
+  if (2==state) {
+    for (int i=start;i<=end;i++) {
+      v->tasks[i].next_pc = -2;
+    }
+  } else {
+    for (int i=start;i<=end;i++) {
+      v->tasks[i].next_state = state;
+    }
+  }
+}
+
 void jmp_nz(vm *v, task *t, data *d) {
   u8 n = F8(d->bytecode, t);
   v->vars[n] -= 1;
@@ -371,6 +388,7 @@ void init_ops(void(* def)(vm *v, task*, data *d)) {
   ops[0x09] = &jmp_nz;
   ops[0x0a] = &jmp_c;
   ops[0x0b] = &set_pal;
+  ops[0x0c] = &reset_thr;
   ops[0x0e] = &fillpg;
   ops[0x0f] = &copy_page;
   ops[0x10] = &update_display;
@@ -493,16 +511,17 @@ void execute_task(vm *v, int i, data *d) {
 void run_tasks(vm *v, data *d) {
   for (int i=0; i<NUM_TASKS; i++) {
     if (-1 != v->tasks[i].next_pc) {
-      v->tasks[i].pc = v->tasks[i].next_pc;
+      v->tasks[i].pc = v->tasks[i].next_pc == -2 ? -1 : v->tasks[i].next_pc;
       v->tasks[i].next_pc = -1;
     }
   }
 
   for (int i=0; i<NUM_TASKS; i++) {
-    if (-1 != v->tasks[i].pc) {
-      v->tasks[i].paused = 0;
-      execute_task(v, i, d);
-    }
+    if (0==v->tasks[i].state)
+      if (-1 != v->tasks[i].pc) {
+        v->tasks[i].paused = 0;
+        execute_task(v, i, d);
+      }
   }
 }
 
