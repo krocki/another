@@ -1,7 +1,4 @@
-#define SCR_W 320
-#define SCR_H 200
-#define SCALE 1
-#define PAGE_SIZE (SCR_W*SCR_H)
+#include "defs.h"
 
 extern int tex_update_needed;
 
@@ -13,10 +10,6 @@ typedef struct {
 #define MAX_VERTICES 256
 vertex vertices[MAX_VERTICES];
 
-u8 current_page0 = 1; // curr
-u8 current_page1 = 2; // front
-u8 current_page2 = 1; // back;
-u8 buffer8[4*320*200];
 int num_poly = 0;
 
 void draw_point(u8 pg, u8 color, int x, int y) {
@@ -102,7 +95,7 @@ void fill_polygon(u8 *data, u16 offset, u8 color, u8 zoom, u8 x, u8 y) {
     return;
 
   u8 count = data[offset++];
-  //printf("poly w=%d h=%d x=%d y=%d vcnt=%d poly #=%d\n", w, h, x, y, count, num_poly++);
+  printf("poly w=%d h=%d x=%d y=%d x1=%d, y1=%d, vcnt=%d poly #=%d\n", w, h, x, y, x1, y1, count, num_poly++);
 
   //draw_point(1, color, x, y);
 
@@ -110,11 +103,12 @@ void fill_polygon(u8 *data, u16 offset, u8 color, u8 zoom, u8 x, u8 y) {
     int vx = x1 + ((data[offset++] * zoom/64)) * SCALE;
     int vy = y1 + ((data[offset++] * zoom/64)) * SCALE;
     vertices[i] = (vertex){.id=i, .x=vx, .y=vy};
-    //draw_point(2, color, vx<0?0:vx, vy<0?0:vy);
+    printf("vertex %d: vx %d, vy %d\n", i, vx, vy);
   }
   if (4 == count && 0 == w & h <=1 ) {
     draw_point(current_page0, color, x1, y1);
   } else {
     draw_polygon(current_page0, color, vertices, count);
+    tex_update_needed=1;
   }
 }

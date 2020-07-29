@@ -1,38 +1,14 @@
 #include "defs.h"
 #include "bitmaps.h"
-//#include "polygon.h"
+#include "polygon.h"
 #include "strings.h"
-#include <sys/time.h>
-#include <unistd.h>
 
-#define DELAY 0
-
-void draw_shape(u8 *p, u16 offset, u8 color, u8 zoom, u8 x, u8 y);
-
-void fill_polygon(u8 *data, u16 offset, u8 color, u8 zoom, u8 x, u8 y) {}
-
-double get_time() {
-  struct timeval tv; gettimeofday(&tv, NULL);
-  return (tv.tv_sec + tv.tv_usec * 1e-6);
-}
-
-void fill_buf(u8 *buf, u16 len, u8 val) {
-  while (len-- > 0) *buf++ = val;
-}
-
-double t0;
-int gl_ok=0;
-int paused=0;
-int step=0;
 #define VAR_SCROLL_Y 0xf9
 
-u8 current_page0 = 1; // curr
-u8 current_page1 = 2; // front
-u8 current_page2 = 1; // back;
 u8 buffer8[4*320*200];
 u32 pal32[16];
 
-float palette_rgb[48];
+extern float palette_rgb[48];
 void set_palette(u8 *p, u8 v) {
   printf("set palette %d", v);
   int offset = 32 * v;
@@ -51,16 +27,13 @@ void set_palette(u8 *p, u8 v) {
   }
 }
 
-//#include "glutils.h"
+#include "glutils.h"
 //#include "glutils4.h"
 
 void *work(void *args);
 
 int main(int argc, char **argv) {
-  gl_ok=1; t0 = get_time();
-  work(argv[1]);
-  return 0;
-  //return display_init(argc, argv);
+  return display_init(argc, argv);
 }
 
 typedef struct {
@@ -209,11 +182,9 @@ void update_display(vm *v, task *t, data *d) {
       current_page1 = get_page(arg0);
     }
   }
-  //tex_update_needed=1;
+  tex_update_needed=1;
   //printf("update_display 0x%02x", arg0);
-#if DELAY
   usleep(50000);
-#endif
 }
 
 void install_task(vm *v, task *t, data *d) {
@@ -428,11 +399,14 @@ void init_ops(void(* def)(vm *v, task*, data *d)) {
   ops[0x1a] = &play_music;
 }
 
+void draw_shape(u8 *p, u16 offset, u8 color, u8 zoom, u8 x, u8 y);
 void draw_shape_parts(u8 *data, u16 offset, u8 zoom, u8 x, u8 y) {
 
   u8 x0 = x - ( data[offset++] * zoom / 64 );
   u8 y0 = y - ( data[offset++] * zoom / 64 );
   u8 count = data[offset++];
+
+  printf("draw_shape_parts x0=0x%02x, y0=0x%02x, count=0x%02x\n", x0, y0, count);
 
   for (u16 i=0; i<=count; i++) {
     u16 addr = ( data[offset] << 8 ) | data[offset+1];
@@ -501,6 +475,7 @@ void draw_sprite(vm *v, task *t, data *d, u8 op) {
     }
   }
 
+  //printf("draw sprite 0x%04x 0x%02x 0x%02x", offset, x, y);
   draw_shape(polydata, offset, 0xff, zoom, x, y);
 }
 
@@ -573,9 +548,7 @@ void *work(void *args) {
 
   int i=0;
   while (gl_ok) {
-    if (1==paused) { if (1!=step) {
-      usleep(1000); continue;
-    } else {step=0;}}
+    if (1==paused) { if (1!=step) {usleep(1000); continue; } else {step=0;}}
     putchar('.'); fflush(stdout);
     run_tasks(&vm0, &d);
     if (i>=MAX_TICKS && MAX_TICKS>0) paused=1;

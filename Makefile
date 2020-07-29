@@ -1,5 +1,5 @@
 .SUFFIXES:
-TARGETS=disasm gl_canvas vm
+TARGETS=disasm gl_canvas gl_poly vm
 
 CC=gcc
 LD=gcc

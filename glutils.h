@@ -11,7 +11,6 @@
 
 #include <pthread.h>
 #include <unistd.h>
-#include <sys/time.h>
 
 void mouse_pos_callback(GLFWwindow* window, double x, double y);
 void mouse_btn_callback(GLFWwindow* window, int button, int action, int mods);
@@ -21,10 +20,7 @@ void texupdate();
 
 float palette_rgb[3*16];
 
-double get_time() {
-  struct timeval tv; gettimeofday(&tv, NULL);
-  return (tv.tv_sec + tv.tv_usec * 1e-6);
-}
+extern double get_time();
 
 void fill(float *buf, size_t len) {
   for (size_t j=0; j<len; j++) {
@@ -39,8 +35,8 @@ int tex_no = 0;
 int paused = 0;
 int step = 0;
 int mode = 0;
-double t0;
-int gl_ok=0;
+extern double t0;
+extern int gl_ok;
 char debug_msg[256] = "\0";
 #define AUTO_REFRESH 60
 #define OFFSET 64
@@ -48,10 +44,6 @@ static GLFWwindow* window;
 
 const char *vs_name = "./glsl/tex_vs.glsl";
 const char *fs_name = "./glsl/tex_fs.glsl";
-
-void fill_buf(u8 *buf, u16 len, u8 val) {
-  while (len-- > 0) *buf++ = val;
-}
 
 char *load_src(const char *file) {
   FILE *f = fopen(file, "r");

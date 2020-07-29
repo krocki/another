@@ -1,3 +1,6 @@
+#ifndef __DEFS_H__
+#define __DEFS_H__
+
 #include <string.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -12,6 +15,11 @@ typedef int8_t  s8;
 typedef int16_t s16;
 typedef int32_t s32;
 typedef int64_t s64;
+
+#define SCR_W 320
+#define SCR_H 200
+#define SCALE 1
+#define PAGE_SIZE (SCR_W*SCR_H)
 
 typedef struct {
   u8 *bytes;
@@ -42,3 +50,5 @@ int read_array(byte_array *o, const char *fname) {
 
   return 0;
 }
+
+#endif
