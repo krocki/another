@@ -7,6 +7,7 @@
 
 u8 buffer8[4*320*200];
 u32 pal32[16];
+int done=0;
 
 extern float palette_rgb[48];
 void set_palette(u8 *p, u8 v) {
@@ -184,7 +185,7 @@ void update_display(vm *v, task *t, data *d) {
   }
   tex_update_needed=1;
   //printf("update_display 0x%02x", arg0);
-  usleep(50000);
+  usleep(1000);
 }
 
 void install_task(vm *v, task *t, data *d) {
@@ -230,6 +231,9 @@ void update_res(vm *v, task *t, data *d) {
   if (arg == 18 || arg == 19 || arg == 71)
     draw_bitmap(arg);
   printf("update res 0x%04x", arg);
+    /* end of intro */
+    if (16002 == arg) { done=1; };
+    /* ... */
 }
 
 void play_sound(vm *v, task *t, data *d) {
@@ -491,7 +495,7 @@ void execute_task(vm *v, int i, data *d) {
   task *t = &(v->tasks[i]);
   v->tasks[i].ticks = 0;
   v->tasks[i].stack_ptr = 0;
-  while (!v->tasks[i].paused && gl_ok) {
+  while (!v->tasks[i].paused && gl_ok && !done) {
     u8 op = d->bytecode[t->pc++];
     printf("\n[%12.6f s, ticks %07d] task %2d tick %4d off 0x%04x op 0x%02x | ", get_time() - t0, v->ticks++, i, (t->ticks)++, t->pc-1, op);
     switch (op) {
@@ -547,7 +551,7 @@ void *work(void *args) {
   data d = {palette.bytes, bytecode.bytes, polygons.bytes};
 
   int i=0;
-  while (gl_ok) {
+  while (gl_ok && !done) {
     if (1==paused) { if (1!=step) {usleep(1000); continue; } else {step=0;}}
     putchar('.'); fflush(stdout);
     run_tasks(&vm0, &d);
