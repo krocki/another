@@ -1,5 +1,5 @@
 .SUFFIXES:
-TARGETS=disasm gl_canvas vm
+TARGETS=disasm gl_canvas vm gl_poly
 
 CC=gcc
 LD=gcc
@@ -9,10 +9,10 @@ DEPS:=$(wildcard *.h) Makefile
 
 # GL
 # Mac OS
-GL_FLAGS=-lglfw -framework Cocoa -framework OpenGL -lpthread
-CFLAGS:=$(CFLAGS) -DAPPLE -DGL_SILENCE_DEPRECATION
+#GL_FLAGS=-lglfw -framework Cocoa -framework OpenGL -lpthread
+CFLAGS:=$(CFLAGS)
 # Linux
-#GL_FLAGS=-lglfw -lGL -lpthread
+GL_FLAGS=-lglfw -lGL -lpthread
 
 LFLAGS:=$(LFLAGS) $(GL_FLAGS)
 

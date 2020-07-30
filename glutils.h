@@ -6,8 +6,8 @@
 #ifdef __APPLE__
 #include <OpenGL/gl3.h>
 #define GLFW_INCLUDE_GLCOREARB
-#include <GLFW/glfw3.h>
 #endif
+#include <GLFW/glfw3.h>
 
 #include <pthread.h>
 #include <unistd.h>
