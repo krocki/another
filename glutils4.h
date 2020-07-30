@@ -21,11 +21,6 @@ void texupdate();
 
 float palette_rgb[3*16];
 
-double get_time() {
-  struct timeval tv; gettimeofday(&tv, NULL);
-  return (tv.tv_sec + tv.tv_usec * 1e-6);
-}
-
 void fill(float *buf, size_t len) {
   for (size_t j=0; j<len; j++) {
     buf[j] = rand() / (float)(RAND_MAX + 1.0f);
@@ -36,11 +31,8 @@ GLuint tex[NUM_BUFFERS];
 float buffer[4 * TEX_W * TEX_H];
 int tex_update_needed = 1;
 int tex_no = 0;
-int paused = 0;
-int step = 0;
 int mode = 0;
 double t0;
-int gl_ok=0;
 char debug_msg[256] = "\0";
 #define AUTO_REFRESH 60
 #define OFFSET 64
@@ -48,10 +40,6 @@ static GLFWwindow* window;
 
 const char *vs_name = "./glsl/tex_vs.glsl";
 const char *fs_name = "./glsl/tex_fs.glsl";
-
-void fill_buf(u8 *buf, u16 len, u8 val) {
-  while (len-- > 0) *buf++ = val;
-}
 
 char *load_src(const char *file) {
   FILE *f = fopen(file, "r");
@@ -343,7 +331,8 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
       case GLFW_KEY_1: mode=1; break;
       case GLFW_KEY_2: mode=2; break;
       case GLFW_KEY_3: mode=3; break;
-      case GLFW_KEY_SPACE: step=1; break;
+      case GLFW_KEY_SPACE: paused^=1; break;
+      case GLFW_KEY_S: step=1; break;
       default: break;
     }
     texupdate();

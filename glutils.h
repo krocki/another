@@ -18,8 +18,6 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 void *work(void *args);
 void texupdate();
 
-float palette_rgb[3*16];
-
 extern double get_time();
 
 void fill(float *buf, size_t len) {
@@ -32,8 +30,6 @@ GLuint tex[NUM_BUFFERS];
 float buffer[TEX_W * TEX_H];
 int tex_update_needed = 1;
 int tex_no = 0;
-int paused = 0;
-int step = 0;
 int mode = 0;
 extern double t0;
 extern int gl_ok;

@@ -1,15 +1,35 @@
 #include "defs.h"
 #include "bitmaps.h"
-//#include "polygon.h"
+#include "polygon.h"
 #include "strings.h"
 #include <sys/time.h>
 #include <unistd.h>
 
-#define DELAY 0
+#define DELAY 1
 
-void draw_shape(u8 *p, u16 offset, u8 color, u8 zoom, u8 x, u8 y);
+int read_array(byte_array *o, const char *fname) {
 
-void fill_polygon(u8 *data, u16 offset, u8 color, u8 zoom, u8 x, u8 y) {}
+  FILE *f = fopen(fname, "rb");
+
+  if (NULL == f) {
+    fprintf(stderr, "couldn't open %s\n", fname);
+    return -1;
+  }
+
+  fseek(f, 0, SEEK_END);
+  o->n = ftell(f);
+  o->name = strdup(fname);
+  rewind(f);
+
+  printf("read %s (%zu B)\n", fname, o->n);
+
+  o->bytes = malloc(o->n * sizeof(u8));
+  fread(o->bytes, sizeof(u8), o->n, f);
+
+  fclose(f);
+
+  return 0;
+}
 
 double get_time() {
   struct timeval tv; gettimeofday(&tv, NULL);
@@ -24,6 +44,8 @@ double t0;
 int gl_ok=0;
 int paused=0;
 int step=0;
+int done=0;
+
 #define VAR_SCROLL_Y 0xf9
 
 u8 current_page0 = 1; // curr
@@ -51,21 +73,24 @@ void set_palette(u8 *p, u8 v) {
   }
 }
 
-//#include "glutils.h"
+#include "glutils.h"
 //#include "glutils4.h"
 
 void *work(void *args);
 
 int main(int argc, char **argv) {
-  gl_ok=1; t0 = get_time();
-  work(argv[1]);
-  return 0;
-  //return display_init(argc, argv);
+  //gl_ok=1; t0 = get_time();
+  //work(argv[1]);
+  //return 0;
+  return display_init(argc, argv);
 }
 
+#define NUM_TASKS 64
+#define NUM_REGS 256
+
 typedef struct {
-  int pc;
-  int next_pc;
+  u32 pc;
+  u32 next_pc;
   int state;
   int next_state;
   int paused;
@@ -74,13 +99,10 @@ typedef struct {
   u8 stack_ptr;
 } task;
 
-#define NUM_TASKS 64
-#define NUM_REGS 256
-
 typedef struct {
   int ticks;
   task tasks[NUM_TASKS];
-  u16 vars[NUM_REGS];
+  i16 vars[NUM_REGS];
 } vm;
 
 typedef struct {
@@ -107,7 +129,7 @@ void init_tasks(vm *v) {
   v->tasks[0].pc = 0;
 }
 
-s16 to_signed(u16 value, u16 bits) {
+i16 to_signed(u16 value, u16 bits) {
   u16 mask = 1 << (bits - 1);
   return value - ((value & mask) << 1);
 }
@@ -172,7 +194,7 @@ void unk(vm *v, task *t, data *d) { printf("unimplemented\n"); getchar(); gl_ok=
 
 void movi(vm *v, task *t, data *d) {
   u8 arg0 = F8(d->bytecode, t);
-  s16 imm = to_signed(F16(d->bytecode, t), 16);
+  i16 imm = to_signed(F16(d->bytecode, t), 16);
   v->vars[arg0] = imm;
   printf("MOVI VAR[0x%02x] = %d", arg0, imm);
 }
@@ -209,7 +231,7 @@ void update_display(vm *v, task *t, data *d) {
       current_page1 = get_page(arg0);
     }
   }
-  //tex_update_needed=1;
+  tex_update_needed=1;
   //printf("update_display 0x%02x", arg0);
 #if DELAY
   usleep(50000);
@@ -228,6 +250,7 @@ void remove_task(vm *v, task *t, data *d) {
   t->paused = 1;
   printf("remove task");
 }
+
 void put_pixel(u8 page, u16 x, u16 y, u8 color) {
   u16 offset = page*PAGE_SIZE + (y*SCR_W+x);
   buffer8[offset] = color;
@@ -241,8 +264,8 @@ void draw_bitmap(u8 id) {
   for (u16 y=0; y<200; ++y) {
     for (u16 x=0; x<320; x+=8) {
       for (u8 b=0; b<8; ++b) {
-        s8 mask = 1 << (7-b);
-        s8 color = 0;
+        i8 mask = 1 << (7-b);
+        i8 color = 0;
         for (u32 p=0; p<4; ++p) {
           if (0 != (buf[offset+p*8000] & mask)) {
             color |= (1 << p);
@@ -259,6 +282,7 @@ void update_res(vm *v, task *t, data *d) {
   if (arg == 18 || arg == 19 || arg == 71)
     draw_bitmap(arg);
   printf("update res 0x%04x", arg);
+  if (16002 == arg) done=1;
 }
 
 void play_sound(vm *v, task *t, data *d) {
@@ -299,7 +323,7 @@ void copy_page(vm *v, task *t, data *d) {
 
 void addi(vm *v, task *t, data *d) {
   u8 n = F8(d->bytecode, t);
-  s16 imm = to_signed(F16(d->bytecode, t), 16);
+  i16 imm = to_signed(F16(d->bytecode, t), 16);
   printf("ADDI var[%u] += %d", n, imm);
   v->vars[n] += imm;
 }
@@ -428,41 +452,6 @@ void init_ops(void(* def)(vm *v, task*, data *d)) {
   ops[0x1a] = &play_music;
 }
 
-void draw_shape_parts(u8 *data, u16 offset, u8 zoom, u8 x, u8 y) {
-
-  u8 x0 = x - ( data[offset++] * zoom / 64 );
-  u8 y0 = y - ( data[offset++] * zoom / 64 );
-  u8 count = data[offset++];
-
-  for (u16 i=0; i<=count; i++) {
-    u16 addr = ( data[offset] << 8 ) | data[offset+1];
-    offset += 2;
-    u16 x1 = x0 + ( data[offset++] * zoom/64 );
-    u16 y1 = y0 + ( data[offset++] * zoom/64 );
-    u8 color = 0xff;
-    if (addr & 0x8000) {
-      color = data[offset] & 0x7f; offset += 2;
-    }
-    draw_shape(data, ((addr<<1) & 0xfffe), color, zoom, x1, y1);
-  }
-}
-void draw_shape(u8 *data, u16 offset, u8 color, u8 zoom, u8 x, u8 y) {
-
-  printf("draw_shape offset=0x%04x ", offset);
-  u8 code = data[offset++];
-  printf("code=0x%04x %02x\n", code, data[0]);
-
-  if (code >= 0xc0) {
-    if (color & 0x80) {
-      color = code & 0x3f;
-    }
-    fill_polygon(data, offset, color, zoom, x, y);
-  } else {
-    if (2 == (code & 0x3f)) {
-      draw_shape_parts(data, offset, zoom, x, y);
-    }
-  }
-}
 void draw_sprite(vm *v, task *t, data *d, u8 op) {
   u16 offset = (F16(d->bytecode, t) << 1) & 0xfffe;
   u16 x = F8(d->bytecode, t);
@@ -503,7 +492,6 @@ void draw_sprite(vm *v, task *t, data *d, u8 op) {
 
   draw_shape(polydata, offset, 0xff, zoom, x, y);
 }
-
 void draw_poly_bkgd(vm *v, task *t, data *d, u8 op) {
   u16 arg = ((((u16)op) << 8 | F8(d->bytecode, t)) << 1) & 0xfffe;
   u8 arg0 = F8(d->bytecode, t);
@@ -516,7 +504,7 @@ void execute_task(vm *v, int i, data *d) {
   task *t = &(v->tasks[i]);
   v->tasks[i].ticks = 0;
   v->tasks[i].stack_ptr = 0;
-  while (!v->tasks[i].paused && gl_ok) {
+  while (!v->tasks[i].paused && gl_ok && !done) {
     u8 op = d->bytecode[t->pc++];
     printf("\n[%12.6f s, ticks %07d] task %2d tick %4d off 0x%04x op 0x%02x | ", get_time() - t0, v->ticks++, i, (t->ticks)++, t->pc-1, op);
     switch (op) {
@@ -572,7 +560,7 @@ void *work(void *args) {
   data d = {palette.bytes, bytecode.bytes, polygons.bytes};
 
   int i=0;
-  while (gl_ok) {
+  while (gl_ok && !done) {
     if (1==paused) { if (1!=step) {
       usleep(1000); continue;
     } else {step=0;}}
