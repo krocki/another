@@ -276,6 +276,7 @@ void draw_bitmap(u8 id) {
       offset+=1;
     }
   }
+  tex_update_needed=1;
 }
 void update_res(vm *v, task *t, data *d) {
   u16 arg = F16(d->bytecode, t);
@@ -424,6 +425,7 @@ void jmp(vm *v, task *t, data *d) {
 void set_pal(vm *v, task *t, data *d) {
   u16 arg = F16(d->bytecode, t);
   set_palette(d->palette, arg >> 8);
+  tex_update_needed=1;
 }
 
 void init_ops(void(* def)(vm *v, task*, data *d)) {

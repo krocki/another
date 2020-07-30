@@ -94,7 +94,6 @@ void fill_polygon(u8 *data, u32 offset, u8 color, u8 zoom, u16 x, u16 y) {
     draw_point(current_page0, color, x1, y1);
   } else {
     draw_polygon(current_page0, color, vertices, count);
-    tex_update_needed=1;
   }
 }
 
